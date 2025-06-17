@@ -6,7 +6,8 @@ COPY ["src/accounting/Accounting.csproj", "src/accounting/"]
 # Restore the project dependencies  
 RUN dotnet restore "src/accounting/Accounting.csproj"
 # Copy the rest of the application code
-COPY src/accounting/ .
+COPY /src/accounting/  src/accounting/
+COPY /pb/demo.proto src/accounting/proto/
 # Build the application
 RUN dotnet build "src/accounting/Accounting.csproj" -c Release -o /app/build    
 # Publish the application
