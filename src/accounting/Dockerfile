@@ -1,35 +1,23 @@
-# Copyright The OpenTelemetry Authors
-# SPDX-License-Identifier: Apache-2.0
-
-FROM --platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/sdk:8.0 AS builder
-ARG TARGETARCH
-ARG BUILD_CONFIGURATION=Release
+FROM platform=${BUILDPLATFORM} mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# Use the official Python image as a base
 WORKDIR /src
-COPY ["/src/accounting/", "Accounting/"]
-COPY ["/pb/demo.proto", "Accounting/proto/"]
-RUN dotnet restore "./Accounting/Accounting.csproj" -r linux-$TARGETARCH
-WORKDIR "/src/Accounting"
-
-RUN dotnet build "./Accounting.csproj" -r linux-$TARGETARCH -c $BUILD_CONFIGURATION -o /app/build
-
-# -----------------------------------------------------------------------------
-
-FROM builder AS publish
-ARG TARGETARCH
-ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./Accounting.csproj" -r linux-$TARGETARCH -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
-
-# -----------------------------------------------------------------------------
-
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
-USER app
+# Copy the project files to the container   
+COPY ["src/accounting/Accounting.csproj", "src/accounting/"]
+# Restore the project dependencies  
+RUN dotnet restore "src/accounting/Accounting.csproj"
+# Copy the rest of the application code
+COPY src/accounting/ .
+# Build the application
+RUN dotnet build "src/accounting/Accounting.csproj" -c Release -o /app/build    
+# Publish the application
+RUN dotnet publish "src/accounting/Accounting.csproj" -c Release -o /app/publish    
+# Use the official ASP.NET runtime image as a base for the final image
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final   
+# Set the working directory in the final image
 WORKDIR /app
-COPY --from=publish /app/publish .
-
-USER root
-RUN mkdir -p "/var/log/opentelemetry/dotnet"
-RUN chown app "/var/log/opentelemetry/dotnet"
-RUN chown app "/app/instrument.sh"
-USER app
-
-ENTRYPOINT ["./instrument.sh", "dotnet", "Accounting.dll"]
+# Copy the published application from the build stage
+COPY --from=build /app/publish .
+# Expose the port the app runs on
+EXPOSE 8080
+# Set the entry point for the application
+ENTRYPOINT ["dotnet", "Accounting.dll"]
